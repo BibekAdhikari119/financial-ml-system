@@ -79,25 +79,23 @@ def test_max_drawdown_empty_series() -> None:
 
 
 def test_sortino_only_penalizes_downside() -> None:
-    """Sortino should be > Sharpe when upside volatility is present but
-    downside volatility is limited.
+    """Sortino > Sharpe when large upside spikes inflate total std but not downside std.
 
-    Series: alternating +0.02 and +0.001 — all positive, so sortino returns
-    0.0 per spec (no downside risk).  Use a mixed series instead.
+    Construct a series where large positive outliers drive up overall std
+    (hurting Sharpe) while the downside is modest and varied — so Sortino's
+    smaller denominator yields a higher ratio than Sharpe.
     """
-    rng = np.random.default_rng(7)
-    # Create returns with identical absolute magnitude but mixed signs.
-    # abs(r) = 0.01 for all, some are negative (below rf).
-    magnitudes = np.full(100, 0.01)
-    signs = np.where(rng.random(100) > 0.4, 1, -1)  # 60% positive
-    returns = pd.Series(magnitudes * signs)
+    rng = np.random.default_rng(42)
+    # Base: small positive drift with genuine downside variance
+    base = rng.normal(0.002, 0.005, 200)
+    # Add large positive spikes to inflate overall std without adding downside risk
+    base[::10] = 0.05  # every 10th day: +5% spike
+    returns = pd.Series(base)
 
     sr = sharpe_ratio(returns, risk_free_rate=0.0)
     so = sortino_ratio(returns, risk_free_rate=0.0)
 
-    # Sortino uses only downside std (smaller denominator) → ratio is larger in magnitude
-    # when mean excess return is positive.
-    # With 60% positive returns mean > 0 → both ratios positive.
+    # Large upside spikes inflate total std → Sharpe penalised; Sortino ignores upside
     assert so > sr, f"Expected sortino ({so:.4f}) > sharpe ({sr:.4f})"
 
 

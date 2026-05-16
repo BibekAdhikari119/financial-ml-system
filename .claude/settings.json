@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(streamlit run *)",
+      "Read(//tmp/**)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8501)",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/backtest -H 'Content-Type: application/json' -d '{\"ticker\":\"AAPL\",\"start\":\"2022-01-01\",\"end\":\"2023-12-31\",\"initial_capital\":100000,\"transaction_cost_bps\":10,\"slippage_bps\":5}')",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import ast, pathlib; ast.parse\\(pathlib.Path\\('ui/app.py'\\).read_text\\(\\)\\); print\\('Syntax OK'\\)\")",
+      "Bash(python -c \"import mlflow; help\\(mlflow.artifacts.download_artifacts\\)\")",
+      "Bash(python -c \"import scripts.train; print\\('train.py imports OK'\\)\")",
+      "Bash(python -c \"import scripts.evaluate; print\\('evaluate.py imports OK'\\)\")",
+      "Bash(python -c \"from src.api._model_loader import load_model_and_scaler; print\\('_model_loader OK'\\)\")",
+      "Bash(python -c \"from src.api.app import app; print\\('API imports OK'\\)\")",
+      "Bash(python -c \"import ast, pathlib; ast.parse\\(pathlib.Path\\('ui/app.py'\\).read_text\\(\\)\\); print\\('UI syntax OK'\\)\")",
+      "Bash(python scripts/train.py --ticker AAPL --start 2020-01-01 --end 2024-01-01 --epochs 30 --d-model 64 --nhead 4 --num-layers 2 --dim-feedforward 128 --batch-size 32 --seed 42)",
+      "Bash(python scripts/evaluate.py --run-id 17889575cdc94e64ace81005100eaa0b --ticker AAPL --start 2024-01-01 --end 2025-01-01 --initial-capital 100000 --transaction-cost-bps 10 --slippage-bps 5)",
+      "Bash(python scripts/evaluate.py --run-id 6deed2227c3040c8b82924992301e958 --ticker AAPL --start 2024-01-01 --end 2025-01-01)",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/backtest -H 'Content-Type: application/json' -d '{\"ticker\":\"AAPL\",\"start\":\"2023-01-01\",\"end\":\"2023-12-31\"}')"
+    ]
+  }
+}

@@ -136,6 +136,15 @@ def test_backtest_200(
     # Standard metric keys should be present.
     expected_metric_keys = {"sharpe_ratio", "sortino_ratio", "max_drawdown", "cagr", "calmar_ratio"}
     assert expected_metric_keys.issubset(set(body["metrics"].keys()))
+    # Benchmark fields should be present and well-formed.
+    assert "benchmark_metrics" in body
+    assert "benchmark_equity_curve" in body
+    assert "benchmark_dates" in body
+    assert isinstance(body["benchmark_metrics"], dict)
+    assert isinstance(body["benchmark_equity_curve"], list)
+    assert isinstance(body["benchmark_dates"], list)
+    assert len(body["benchmark_equity_curve"]) > 0
+    assert len(body["benchmark_equity_curve"]) == len(body["benchmark_dates"])
 
 
 @patch("src.api.routes.portfolio.build_features", return_value=_make_featured_df())

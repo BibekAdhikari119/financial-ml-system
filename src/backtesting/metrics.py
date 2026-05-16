@@ -39,7 +39,7 @@ def sharpe_ratio(
     excess = returns - daily_rf
     std = excess.std(ddof=1)
 
-    if std == 0 or math.isnan(std):
+    if std < 1e-10 or math.isnan(std):
         return 0.0
 
     return float((excess.mean() * periods_per_year) / (std * math.sqrt(periods_per_year)))
@@ -76,7 +76,7 @@ def sortino_ratio(
 
     downside_std = downside.std(ddof=1)
 
-    if downside_std == 0 or math.isnan(downside_std):
+    if downside_std < 1e-10 or math.isnan(downside_std):
         return 0.0
 
     mean_excess = excess.mean()

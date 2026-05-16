@@ -40,6 +40,7 @@ class BacktestRequest(BaseModel):
     initial_capital: float = 100_000.0
     transaction_cost_bps: int = 10
     slippage_bps: int = 5
+    model_path: str | None = None
 
     @model_validator(mode="after")
     def end_after_start(self) -> "BacktestRequest":
@@ -110,6 +111,9 @@ class BacktestResponse(BaseModel):
     metrics: dict[str, float]
     equity_curve: list[float]
     dates: list[str]  # ISO date strings
+    benchmark_metrics: dict[str, float] = {}
+    benchmark_equity_curve: list[float] = []
+    benchmark_dates: list[str] = []
 
 
 class PortfolioResponse(BaseModel):

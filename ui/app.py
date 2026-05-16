@@ -261,6 +261,16 @@ with tab_backtest:
         bt_ticker = st.text_input("Ticker", value="AAPL", key="bt_ticker")
         bt_start = st.date_input("Start Date", value=datetime.date(2022, 1, 1), key="bt_start")
         bt_end = st.date_input("End Date", value=datetime.date(2023, 12, 31), key="bt_end")
+        bt_strategy = st.selectbox(
+            "Strategy",
+            ["SMA Momentum", "RSI Mean-Reversion", "MACD Trend"],
+            key="bt_strategy",
+            help=(
+                "SMA Momentum: long when Close > SMA-20, short otherwise. "
+                "RSI Mean-Reversion: long when RSI < 35, short when RSI > 65. "
+                "MACD Trend: long when MACD line > signal, short otherwise."
+            ),
+        )
     with col2:
         bt_capital = st.number_input("Initial Capital ($)", value=100_000.0, step=10_000.0, key="bt_capital")
         bt_tc = st.number_input("Transaction Cost (bps)", value=10, step=1, key="bt_tc")
@@ -277,8 +287,22 @@ with tab_backtest:
 
                 raw_df = fetch_market_data(bt_ticker, str(bt_start), str(bt_end))
                 feat_df = build_features(raw_df)
-                n = len(feat_df)
-                signals = [EnsembleSignal(0.0, 0.0, 0.0, 0.0) for _ in range(n)]
+
+                def _make_signals(df: pd.DataFrame, strategy_name: str) -> list[EnsembleSignal]:
+                    sigs = []
+                    for i in range(len(df)):
+                        row = df.iloc[i]
+                        if strategy_name == "SMA Momentum":
+                            score = 0.5 if row["Close"] > row["sma_20"] else -0.5
+                        elif strategy_name == "RSI Mean-Reversion":
+                            rsi = row.get("rsi_14", 50.0)
+                            score = 0.5 if rsi < 35 else (-0.5 if rsi > 65 else 0.0)
+                        else:  # MACD Trend
+                            score = 0.5 if row.get("macd_line", 0) > row.get("macd_signal", 0) else -0.5
+                        sigs.append(EnsembleSignal(score, 0.0, score, abs(score)))
+                    return sigs
+
+                signals = _make_signals(feat_df, bt_strategy)
                 strategy = EnsembleStrategy(signals)
                 engine = BacktestEngine(
                     feat_df, strategy,
@@ -288,21 +312,84 @@ with tab_backtest:
                 )
                 result: BacktestResult = engine.run()
                 st.session_state["backtest_result"] = result
-                st.success("Backtest complete!")
+                st.session_state["backtest_strategy"] = bt_strategy
+
+                # Buy-and-hold benchmark
+                bh_sigs = [EnsembleSignal(1.0, 0.0, 1.0, 1.0)] * len(feat_df)
+                bh_engine = BacktestEngine(
+                    feat_df, EnsembleStrategy(bh_sigs),
+                    initial_capital=bt_capital,
+                    transaction_cost_bps=int(bt_tc),
+                    slippage_bps=int(bt_slip),
+                )
+                bh_result: BacktestResult = bh_engine.run()
+                st.session_state["bh_result"] = bh_result
+
+                st.success(f"Backtest complete — {len(result.trades)} trades executed.")
             except Exception as e:
                 st.error(f"Error: {e}")
 
     if "backtest_result" in st.session_state:
         result = st.session_state["backtest_result"]
+        bh_result = st.session_state["bh_result"]
+        strat_name = st.session_state.get("backtest_strategy", "")
 
-        st.subheader("Equity Curve")
-        st.line_chart(result.equity_curve)
+        st.subheader(f"Equity Curve — {strat_name} vs. Buy & Hold")
+        chart_df = pd.DataFrame({
+            strat_name: result.equity_curve.values,
+            "Buy & Hold": bh_result.equity_curve.values,
+        }, index=result.equity_curve.index)
+        st.line_chart(chart_df)
+
+        # Drawdown series
+        equity = result.equity_curve
+        drawdown = (equity / equity.cummax() - 1.0) * 100
+        st.subheader("Drawdown (%)")
+        st.area_chart(drawdown)
+
+        metric_labels = {
+            "sharpe_ratio": "Sharpe Ratio",
+            "sortino_ratio": "Sortino Ratio",
+            "max_drawdown": "Max Drawdown",
+            "cagr": "CAGR",
+            "calmar_ratio": "Calmar Ratio",
+        }
 
         st.subheader("Performance Metrics")
-        metrics_df = pd.DataFrame(
-            list(result.metrics.items()),
-            columns=["Metric", "Value"]
-        ).set_index("Metric")
-        st.dataframe(metrics_df)
+        left, right = st.columns(2)
+        with left:
+            st.subheader(f"Strategy: {strat_name}")
+            for k, v in result.metrics.items():
+                label = metric_labels.get(k, k)
+                fmt = f"{v:.2%}" if k in ("max_drawdown", "cagr") else f"{v:.3f}"
+                st.metric(label, fmt)
+        with right:
+            st.subheader("Benchmark: Buy & Hold")
+            for k, v in bh_result.metrics.items():
+                label = metric_labels.get(k, k)
+                fmt = f"{v:.2%}" if k in ("max_drawdown", "cagr") else f"{v:.3f}"
+                st.metric(label, fmt)
+
+        st.subheader("Strategy vs. Buy & Hold")
+
+        def _beats(metric: str, strat_val: float, bh_val: float) -> str:
+            if metric == "max_drawdown":
+                return "✓" if strat_val > bh_val else "✗"  # less negative is better
+            return "✓" if strat_val > bh_val else "✗"
+
+        cmp_data = {
+            "Metric": list(metric_labels.values()),
+            "Strategy": [f"{v:.2%}" if k in ("max_drawdown", "cagr") else f"{v:.3f}"
+                         for k, v in result.metrics.items()],
+            "Buy & Hold": [f"{v:.2%}" if k in ("max_drawdown", "cagr") else f"{v:.3f}"
+                           for k, v in bh_result.metrics.items()],
+            "Outperforms": [_beats(k, sv, bv)
+                            for (k, sv), (_, bv) in zip(result.metrics.items(), bh_result.metrics.items())],
+        }
+        st.dataframe(pd.DataFrame(cmp_data).set_index("Metric"))
+
+        if not result.trades.empty:
+            with st.expander(f"Trade Log ({len(result.trades)} trades)"):
+                st.dataframe(result.trades)
     else:
-        st.info("Configure parameters and click 'Run Backtest'.")
+        st.info("Select a strategy and click 'Run Backtest'.")
