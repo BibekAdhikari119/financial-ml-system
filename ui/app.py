@@ -1,7 +1,9 @@
 """
 Financial ML System — Streamlit Dashboard
-Entry point for the agentic workflow UI.
+Ready-to-use financial analysis and AI signal app.
 """
+
+from __future__ import annotations
 
 import os
 import sys
@@ -12,170 +14,233 @@ import streamlit as st
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from agents import run_orchestrator
-
 st.set_page_config(
     page_title="Financial ML System",
     page_icon="📈",
     layout="wide",
 )
 
-# ── Sidebar ──────────────────────────────────────────────────────────────────
+_TODAY = datetime.date.today()
+_ONE_YEAR_AGO = _TODAY - datetime.timedelta(days=365)
+_TWO_YEARS_AGO = _TODAY - datetime.timedelta(days=730)
+
+POPULAR_TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "JPM", "SPY", "QQQ"]
+
+# ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.title("Financial ML System")
-    st.caption("Agentic AI/ML Engineering Workflow")
+    st.title("Financial ML")
+    st.caption("AI-powered market analysis")
     st.divider()
 
-    st.subheader("Agent Pipeline")
     st.markdown("""
-    | Agent | Model |
-    |-------|-------|
-    | Orchestrator | Opus 4.7 |
-    | Planner | Sonnet 4.6 |
-    | Coder | Opus 4.7 |
-    | Verifier | Sonnet 4.6 |
-    | Reviewer | Haiku 4.5 |
+    **Tabs**
+    - **AI Signals** — transformer buy/sell signals
+    - **Market Data** — OHLCV charts & tables
+    - **Technical Indicators** — SMA, RSI, MACD overlays
+    - **Backtest** — strategy vs. buy-and-hold
     """)
     st.divider()
 
-    api_key = st.text_input(
-        "Anthropic API Key",
-        type="password",
-        value=os.environ.get("ANTHROPIC_API_KEY", ""),
-        help="Set ANTHROPIC_API_KEY in your environment or enter it here.",
-    )
-    if api_key:
-        os.environ["ANTHROPIC_API_KEY"] = api_key
+    # Model status indicator
+    model_path = os.environ.get("MLFLOW_MODEL_PATH", "")
+    if model_path:
+        st.success(f"Model loaded\n`{model_path[:40]}...`" if len(model_path) > 40 else f"Model loaded\n`{model_path}`")
+    else:
+        st.warning("No model loaded\n\nSet `MLFLOW_MODEL_PATH` env var to enable AI predictions.")
 
     st.divider()
-    st.caption("Built by Bibek Adhikari | CS7646 → Production ML")
+    st.caption("Built by Bibek Adhikari")
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
-tab_agent, tab_market, tab_indicators, tab_backtest = st.tabs([
-    "Agent Workspace",
+tab_signals, tab_market, tab_indicators, tab_backtest = st.tabs([
+    "AI Signals",
     "Market Data",
     "Technical Indicators",
     "Backtest Results",
 ])
 
-# ── Tab 1: Agent Workspace ────────────────────────────────────────────────────
-with tab_agent:
-    st.title("Financial ML Agent Workspace")
+# ── Tab 1: AI Signals ─────────────────────────────────────────────────────────
+with tab_signals:
+    st.header("AI Market Signals")
     st.markdown(
-        "Describe a feature or task. The Orchestrator will coordinate Planner → Coder → Verifier → Reviewer."
+        "Select a ticker and date range to get an AI-powered buy/sell signal "
+        "from the transformer model alongside key price statistics."
     )
 
-    EXAMPLE_PROMPTS = [
-        "Build a technical indicator feature pipeline using SMA ratio, Bollinger Bands %, and CCI for JPM stock.",
-        "Implement a PPO reinforcement learning trading agent using Stable-Baselines3.",
-        "Create a sentiment feature extractor that pulls recent news headlines and scores them with a Hugging Face model.",
-        "Write a backtesting engine that computes Sharpe ratio, max drawdown, and cumulative returns.",
-    ]
+    col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+    with col1:
+        sig_ticker_choice = st.selectbox("Ticker", POPULAR_TICKERS + ["Other..."], key="sig_ticker_choice")
+        if sig_ticker_choice == "Other...":
+            sig_ticker = st.text_input("Enter ticker symbol", value="BRK-B", key="sig_ticker_custom").upper().strip()
+        else:
+            sig_ticker = sig_ticker_choice
+    with col2:
+        sig_start = st.date_input("From", value=_ONE_YEAR_AGO, key="sig_start")
+    with col3:
+        sig_end = st.date_input("To", value=_TODAY, key="sig_end")
+    with col4:
+        st.write("")
+        st.write("")
+        analyze_btn = st.button("Analyze", type="primary", key="analyze_signal")
 
-    with st.expander("Example prompts"):
-        for prompt in EXAMPLE_PROMPTS:
-            if st.button(prompt, key=prompt):
-                st.session_state["user_request"] = prompt
-
-    user_request = st.text_area(
-        "Your request",
-        value=st.session_state.get("user_request", ""),
-        height=120,
-        placeholder="e.g. Build a momentum indicator feature pipeline for AAPL...",
-    )
-
-    run_button = st.button("Run Agent Workflow", type="primary", disabled=not api_key)
-
-    # ── Results ───────────────────────────────────────────────────────────────
-    if run_button and user_request.strip():
-        if not os.environ.get("ANTHROPIC_API_KEY"):
-            st.error("Please provide your Anthropic API key in the sidebar.")
-            st.stop()
-
-        plan_col, code_col, verify_col, review_col = st.columns([1, 1.4, 1, 1])
-
-        with plan_col:
-            plan_placeholder = st.empty()
-            plan_placeholder.info("Waiting for Planner...")
-
-        with code_col:
-            code_placeholder = st.empty()
-            code_placeholder.info("Waiting for Coder...")
-
-        with verify_col:
-            verify_placeholder = st.empty()
-            verify_placeholder.info("Waiting for Verifier...")
-
-        with review_col:
-            review_placeholder = st.empty()
-            review_placeholder.info("Waiting for Reviewer...")
-
-        summary_placeholder = st.empty()
-
-        with st.spinner("Orchestrator is coordinating agents..."):
+    if analyze_btn and sig_ticker:
+        with st.spinner(f"Fetching data for {sig_ticker}..."):
             try:
-                results = run_orchestrator(user_request.strip())
+                from src.data.market import fetch_market_data
+                from src.features.technical import build_features
+
+                df = fetch_market_data(sig_ticker, str(sig_start), str(sig_end))
+                feat_df = build_features(df)
+
+                last_close = float(df["Close"].iloc[-1])
+                prev_close = float(df["Close"].iloc[-2]) if len(df) > 1 else last_close
+                pct_change = (last_close - prev_close) / prev_close * 100
+                period_high = float(df["High"].max())
+                period_low = float(df["Low"].min())
+                avg_volume = int(df["Volume"].mean())
+
+                st.session_state.update({
+                    "sig_df": df,
+                    "sig_feat_df": feat_df,
+                    "sig_label": sig_ticker,
+                    "sig_stats": {
+                        "last_close": last_close,
+                        "pct_change": pct_change,
+                        "period_high": period_high,
+                        "period_low": period_low,
+                        "avg_volume": avg_volume,
+                        "data_points": len(df),
+                    },
+                    "sig_signal": None,
+                    "sig_model_error": "",
+                })
+
+                # Attempt transformer signal if model is configured
+                env_model_path = os.environ.get("MLFLOW_MODEL_PATH", "")
+                if env_model_path:
+                    try:
+                        import pickle
+                        import torch
+                        from src.api._model_loader import load_model_and_scaler
+                        from src.features.dataset import TimeSeriesDataset
+                        from src.models.ensemble import generate_ensemble_signal
+
+                        window_size = int(os.environ.get("MLFLOW_WINDOW_SIZE", "60"))
+                        ohlcv_cols = {"Open", "High", "Low", "Close", "Volume"}
+                        feature_cols = [c for c in feat_df.columns if c not in ohlcv_cols]
+
+                        model, scaler = load_model_and_scaler(env_model_path)
+                        ds = TimeSeriesDataset(
+                            feat_df, feature_cols, "Close",
+                            window_size=window_size, horizon=1,
+                            scaler=scaler, fit_scaler=False,
+                        )
+                        if len(ds) > 0:
+                            x, _ = ds[len(ds) - 1]
+                            x = x.unsqueeze(0)
+                            with torch.no_grad():
+                                pred = float(model(x).item())
+                            signal = generate_ensemble_signal(pred, 0.0)
+                            st.session_state["sig_signal"] = signal
+                    except Exception as exc:
+                        st.session_state["sig_model_error"] = str(exc)
+
             except Exception as e:
-                st.error(f"Agent workflow failed: {e}")
-                st.stop()
+                st.error(f"Failed to fetch data: {e}")
 
-        # Plan panel
-        with plan_col:
-            plan_placeholder.empty()
-            st.subheader("Planner Output")
-            if results["plan"]:
-                st.markdown(results["plan"])
-            else:
-                st.warning("No plan generated.")
+    if "sig_df" in st.session_state:
+        df = st.session_state["sig_df"]
+        feat_df = st.session_state["sig_feat_df"]
+        stats = st.session_state["sig_stats"]
+        label = st.session_state.get("sig_label", "")
+        signal = st.session_state.get("sig_signal")
+        model_err = st.session_state.get("sig_model_error", "")
 
-        # Code panel
-        with code_col:
-            code_placeholder.empty()
-            st.subheader("Coder Output")
-            if results["code"]:
-                st.code(results["code"], language="python")
-            else:
-                st.warning("No code generated.")
+        # ── Price snapshot ────────────────────────────────────────────────────
+        st.divider()
+        c1, c2, c3, c4, c5 = st.columns(5)
+        delta_str = f"{stats['pct_change']:+.2f}%"
+        c1.metric("Last Close", f"${stats['last_close']:.2f}", delta_str)
+        c2.metric("Period High", f"${stats['period_high']:.2f}")
+        c3.metric("Period Low", f"${stats['period_low']:.2f}")
+        c4.metric("Avg Daily Volume", f"{stats['avg_volume']:,}")
+        c5.metric("Trading Days", stats["data_points"])
 
-        # Verification panel
-        with verify_col:
-            verify_placeholder.empty()
-            st.subheader("Verifier Output")
-            if results["verification"]:
-                verify_text = results["verification"]
-                if "FAIL" in verify_text.upper():
-                    st.error(verify_text)
-                elif "WARNING" in verify_text.upper():
-                    st.warning(verify_text)
+        # ── Signal panel ─────────────────────────────────────────────────────
+        st.divider()
+        sig_col, breakdown_col, chart_col = st.columns([1, 1, 3])
+
+        with sig_col:
+            st.subheader("Signal")
+            if signal is not None:
+                score = signal.ensemble_score
+                if score > 0.1:
+                    st.success(f"### BUY\nScore: `{score:+.3f}`")
+                elif score < -0.1:
+                    st.error(f"### SELL\nScore: `{score:+.3f}`")
                 else:
-                    st.success(verify_text)
+                    st.info(f"### HOLD\nScore: `{score:+.3f}`")
             else:
-                st.warning("No verification generated.")
-
-        # Review panel
-        with review_col:
-            review_placeholder.empty()
-            st.subheader("Reviewer Output")
-            if results["review"]:
-                review_text = results["review"]
-                if "FAIL" in review_text.upper():
-                    st.error(review_text)
-                elif "WARNING" in review_text.upper():
-                    st.warning(review_text)
+                st.info("### —\nNo model loaded")
+                if model_err:
+                    with st.expander("Model error"):
+                        st.code(model_err)
                 else:
-                    st.success(review_text)
+                    st.caption("Set `MLFLOW_MODEL_PATH` to enable predictions.")
+
+        with breakdown_col:
+            st.subheader("Breakdown")
+            if signal is not None:
+                st.metric("Confidence", f"{signal.confidence:.1%}")
+                st.metric("Transformer Score", f"{signal.transformer_score:+.4f}")
+                st.metric("Sentiment Score", f"{signal.sentiment_score:+.4f}")
             else:
-                st.warning("No review generated.")
+                st.markdown("""
+                | Component | Status |
+                |-----------|--------|
+                | Transformer | Not loaded |
+                | Sentiment | No API key |
+                """)
 
-        # Orchestrator summary
-        summary_placeholder.empty()
-        if results["summary"]:
-            st.divider()
-            st.subheader("Orchestrator Summary")
-            st.markdown(results["summary"])
+        with chart_col:
+            st.subheader(f"{label} — Close Price")
+            st.line_chart(df["Close"])
 
-    elif run_button and not user_request.strip():
-        st.warning("Please enter a request before running.")
+        # ── Technical charts ─────────────────────────────────────────────────
+        with st.expander("Technical Indicators", expanded=False):
+            ind_col1, ind_col2 = st.columns(2)
+
+            with ind_col1:
+                if all(c in feat_df.columns for c in ["sma_20", "sma_50"]):
+                    ma_df = feat_df[["Close", "sma_20", "sma_50"]].rename(
+                        columns={"Close": "Price", "sma_20": "SMA 20", "sma_50": "SMA 50"}
+                    )
+                    st.subheader("Price vs Moving Averages")
+                    st.line_chart(ma_df)
+
+                if "rsi_14" in feat_df.columns:
+                    st.subheader("RSI (14)")
+                    rsi_series = feat_df["rsi_14"]
+                    st.line_chart(rsi_series)
+                    last_rsi = float(rsi_series.iloc[-1])
+                    rsi_label = "Overbought (>70)" if last_rsi > 70 else ("Oversold (<30)" if last_rsi < 30 else "Neutral")
+                    st.caption(f"Current RSI: **{last_rsi:.1f}** — {rsi_label}")
+
+            with ind_col2:
+                if all(c in feat_df.columns for c in ["macd_line", "macd_signal"]):
+                    st.subheader("MACD")
+                    st.line_chart(feat_df[["macd_line", "macd_signal"]].rename(
+                        columns={"macd_line": "MACD", "macd_signal": "Signal"}
+                    ))
+
+                if all(c in feat_df.columns for c in ["bb_upper", "bb_lower"]):
+                    bb_df = feat_df[["Close", "bb_upper", "bb_lower"]].rename(
+                        columns={"Close": "Price", "bb_upper": "BB Upper", "bb_lower": "BB Lower"}
+                    )
+                    st.subheader("Bollinger Bands")
+                    st.line_chart(bb_df)
+    else:
+        st.info("Select a ticker above and click **Analyze** to get started.")
 
 # ── Tab 2: Market Data ────────────────────────────────────────────────────────
 with tab_market:
@@ -184,9 +249,9 @@ with tab_market:
     with col1:
         md_ticker = st.text_input("Ticker", value="AAPL", key="md_ticker")
     with col2:
-        md_start = st.date_input("Start Date", value=datetime.date(2023, 1, 1), key="md_start")
+        md_start = st.date_input("Start Date", value=_ONE_YEAR_AGO, key="md_start")
     with col3:
-        md_end = st.date_input("End Date", value=datetime.date(2023, 12, 31), key="md_end")
+        md_end = st.date_input("End Date", value=_TODAY, key="md_end")
 
     if st.button("Fetch Market Data", key="fetch_market"):
         with st.spinner("Fetching data..."):
@@ -194,24 +259,35 @@ with tab_market:
                 from src.data.market import fetch_market_data
                 df = fetch_market_data(md_ticker, str(md_start), str(md_end))
                 st.session_state["market_df"] = df
-                st.success(f"Fetched {len(df)} rows for {md_ticker}")
+                st.session_state["market_ticker"] = md_ticker
+                st.success(f"Fetched {len(df)} trading days for {md_ticker}")
             except Exception as e:
                 st.error(f"Error: {e}")
 
     if "market_df" in st.session_state:
         df = st.session_state["market_df"]
-        st.subheader("OHLCV Data")
-        st.dataframe(df.tail(20))
+        ticker_lbl = st.session_state.get("market_ticker", "")
 
-        # Simple close price chart
-        st.subheader("Close Price")
+        # Summary metrics
+        last = df["Close"].iloc[-1]
+        first = df["Close"].iloc[0]
+        total_return = (last - first) / first * 100
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Latest Close", f"${last:.2f}")
+        m2.metric("Period Return", f"{total_return:+.2f}%")
+        m3.metric("52-wk High", f"${df['High'].max():.2f}")
+        m4.metric("52-wk Low", f"${df['Low'].min():.2f}")
+
+        st.subheader(f"{ticker_lbl} — Close Price")
         st.line_chart(df["Close"])
 
-        # Volume bar chart
         st.subheader("Volume")
         st.bar_chart(df["Volume"])
+
+        with st.expander("Raw OHLCV Table (last 30 days)"):
+            st.dataframe(df.tail(30))
     else:
-        st.info("Enter a ticker and date range, then click 'Fetch Market Data'.")
+        st.info("Enter a ticker and date range, then click **Fetch Market Data**.")
 
 # ── Tab 3: Technical Indicators ───────────────────────────────────────────────
 with tab_indicators:
@@ -220,9 +296,9 @@ with tab_indicators:
     with col1:
         ti_ticker = st.text_input("Ticker", value="AAPL", key="ti_ticker")
     with col2:
-        ti_start = st.date_input("Start Date", value=datetime.date(2023, 1, 1), key="ti_start")
+        ti_start = st.date_input("Start Date", value=_ONE_YEAR_AGO, key="ti_start")
     with col3:
-        ti_end = st.date_input("End Date", value=datetime.date(2023, 12, 31), key="ti_end")
+        ti_end = st.date_input("End Date", value=_TODAY, key="ti_end")
 
     if st.button("Compute Indicators", key="compute_indicators"):
         with st.spinner("Computing indicators..."):
@@ -232,26 +308,57 @@ with tab_indicators:
                 raw_df = fetch_market_data(ti_ticker, str(ti_start), str(ti_end))
                 feat_df = build_features(raw_df)
                 st.session_state["features_df"] = feat_df
+                st.session_state["features_ticker"] = ti_ticker
                 st.success(f"Computed {len(feat_df.columns)} features for {ti_ticker}")
             except Exception as e:
                 st.error(f"Error: {e}")
 
     if "features_df" in st.session_state:
         feat_df = st.session_state["features_df"]
+        ticker_lbl = st.session_state.get("features_ticker", "")
 
-        st.subheader("Price + Moving Averages")
-        price_cols = ["Close"] + [c for c in feat_df.columns if c.startswith("sma_") or c.startswith("ema_")]
-        st.line_chart(feat_df[[c for c in price_cols if c in feat_df.columns]])
+        st.subheader(f"{ticker_lbl} — Price + Moving Averages")
+        ma_cols = ["Close"] + [c for c in feat_df.columns if c.startswith("sma_") or c.startswith("ema_")]
+        rename_map = {
+            "sma_10": "SMA 10", "sma_20": "SMA 20", "sma_50": "SMA 50",
+            "ema_12": "EMA 12", "ema_26": "EMA 26",
+        }
+        chart_df = feat_df[[c for c in ma_cols if c in feat_df.columns]].rename(columns=rename_map)
+        st.line_chart(chart_df)
 
-        if "rsi_14" in feat_df.columns:
-            st.subheader("RSI (14)")
-            st.line_chart(feat_df["rsi_14"])
+        left_col, right_col = st.columns(2)
 
-        if "macd_line" in feat_df.columns:
-            st.subheader("MACD")
-            st.line_chart(feat_df[["macd_line", "macd_signal"]])
+        with left_col:
+            if "rsi_14" in feat_df.columns:
+                st.subheader("RSI (14)")
+                st.line_chart(feat_df["rsi_14"].rename("RSI"))
+                last_rsi = float(feat_df["rsi_14"].iloc[-1])
+                if last_rsi > 70:
+                    st.warning(f"RSI {last_rsi:.1f} — Overbought territory (>70)")
+                elif last_rsi < 30:
+                    st.warning(f"RSI {last_rsi:.1f} — Oversold territory (<30)")
+                else:
+                    st.success(f"RSI {last_rsi:.1f} — Neutral zone")
+
+            if all(c in feat_df.columns for c in ["bb_upper", "bb_lower", "bb_pct_b"]):
+                st.subheader("Bollinger Bands %B")
+                st.line_chart(feat_df["bb_pct_b"].rename("%B"))
+                st.caption("%B > 1: price above upper band (overbought) | %B < 0: below lower band (oversold)")
+
+        with right_col:
+            if all(c in feat_df.columns for c in ["macd_line", "macd_signal", "macd_histogram"]):
+                st.subheader("MACD")
+                st.line_chart(feat_df[["macd_line", "macd_signal"]].rename(
+                    columns={"macd_line": "MACD", "macd_signal": "Signal"}
+                ))
+                st.subheader("MACD Histogram")
+                st.bar_chart(feat_df["macd_histogram"].rename("Histogram"))
+
+            if "atr_14" in feat_df.columns:
+                st.subheader("ATR (14) — Volatility")
+                st.line_chart(feat_df["atr_14"].rename("ATR"))
     else:
-        st.info("Enter a ticker and date range, then click 'Compute Indicators'.")
+        st.info("Enter a ticker and date range, then click **Compute Indicators**.")
 
 # ── Tab 4: Backtest Results ───────────────────────────────────────────────────
 with tab_backtest:
@@ -259,8 +366,8 @@ with tab_backtest:
     col1, col2 = st.columns(2)
     with col1:
         bt_ticker = st.text_input("Ticker", value="AAPL", key="bt_ticker")
-        bt_start = st.date_input("Start Date", value=datetime.date(2022, 1, 1), key="bt_start")
-        bt_end = st.date_input("End Date", value=datetime.date(2023, 12, 31), key="bt_end")
+        bt_start = st.date_input("Start Date", value=_TWO_YEARS_AGO, key="bt_start")
+        bt_end = st.date_input("End Date", value=_TODAY, key="bt_end")
         bt_strategy = st.selectbox(
             "Strategy",
             ["SMA Momentum", "RSI Mean-Reversion", "MACD Trend"],
@@ -275,8 +382,9 @@ with tab_backtest:
         bt_capital = st.number_input("Initial Capital ($)", value=100_000.0, step=10_000.0, key="bt_capital")
         bt_tc = st.number_input("Transaction Cost (bps)", value=10, step=1, key="bt_tc")
         bt_slip = st.number_input("Slippage (bps)", value=5, step=1, key="bt_slip")
+        st.caption("1 bps = 0.01%. Typical equity: 5–15 bps per side.")
 
-    if st.button("Run Backtest", key="run_backtest"):
+    if st.button("Run Backtest", key="run_backtest", type="primary"):
         with st.spinner("Running backtest..."):
             try:
                 from src.data.market import fetch_market_data
@@ -313,8 +421,8 @@ with tab_backtest:
                 result: BacktestResult = engine.run()
                 st.session_state["backtest_result"] = result
                 st.session_state["backtest_strategy"] = bt_strategy
+                st.session_state["backtest_ticker"] = bt_ticker
 
-                # Buy-and-hold benchmark
                 bh_sigs = [EnsembleSignal(1.0, 0.0, 1.0, 1.0)] * len(feat_df)
                 bh_engine = BacktestEngine(
                     feat_df, EnsembleStrategy(bh_sigs),
@@ -333,18 +441,18 @@ with tab_backtest:
         result = st.session_state["backtest_result"]
         bh_result = st.session_state["bh_result"]
         strat_name = st.session_state.get("backtest_strategy", "")
+        bt_lbl = st.session_state.get("backtest_ticker", "")
 
-        st.subheader(f"Equity Curve — {strat_name} vs. Buy & Hold")
+        st.subheader(f"{bt_lbl} — {strat_name} vs. Buy & Hold")
         chart_df = pd.DataFrame({
             strat_name: result.equity_curve.values,
             "Buy & Hold": bh_result.equity_curve.values,
         }, index=result.equity_curve.index)
         st.line_chart(chart_df)
 
-        # Drawdown series
         equity = result.equity_curve
         drawdown = (equity / equity.cummax() - 1.0) * 100
-        st.subheader("Drawdown (%)")
+        st.subheader("Strategy Drawdown (%)")
         st.area_chart(drawdown)
 
         metric_labels = {
@@ -370,11 +478,11 @@ with tab_backtest:
                 fmt = f"{v:.2%}" if k in ("max_drawdown", "cagr") else f"{v:.3f}"
                 st.metric(label, fmt)
 
-        st.subheader("Strategy vs. Buy & Hold")
+        st.subheader("Head-to-Head Comparison")
 
         def _beats(metric: str, strat_val: float, bh_val: float) -> str:
             if metric == "max_drawdown":
-                return "✓" if strat_val > bh_val else "✗"  # less negative is better
+                return "✓" if strat_val > bh_val else "✗"
             return "✓" if strat_val > bh_val else "✗"
 
         cmp_data = {
@@ -383,8 +491,8 @@ with tab_backtest:
                          for k, v in result.metrics.items()],
             "Buy & Hold": [f"{v:.2%}" if k in ("max_drawdown", "cagr") else f"{v:.3f}"
                            for k, v in bh_result.metrics.items()],
-            "Outperforms": [_beats(k, sv, bv)
-                            for (k, sv), (_, bv) in zip(result.metrics.items(), bh_result.metrics.items())],
+            "Strategy Wins": [_beats(k, sv, bv)
+                               for (k, sv), (_, bv) in zip(result.metrics.items(), bh_result.metrics.items())],
         }
         st.dataframe(pd.DataFrame(cmp_data).set_index("Metric"))
 
@@ -392,4 +500,4 @@ with tab_backtest:
             with st.expander(f"Trade Log ({len(result.trades)} trades)"):
                 st.dataframe(result.trades)
     else:
-        st.info("Select a strategy and click 'Run Backtest'.")
+        st.info("Select a ticker and strategy, then click **Run Backtest**.")

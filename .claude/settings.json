@@ -16,7 +16,9 @@
       "Bash(python scripts/train.py --ticker AAPL --start 2020-01-01 --end 2024-01-01 --epochs 30 --d-model 64 --nhead 4 --num-layers 2 --dim-feedforward 128 --batch-size 32 --seed 42)",
       "Bash(python scripts/evaluate.py --run-id 17889575cdc94e64ace81005100eaa0b --ticker AAPL --start 2024-01-01 --end 2025-01-01 --initial-capital 100000 --transaction-cost-bps 10 --slippage-bps 5)",
       "Bash(python scripts/evaluate.py --run-id 6deed2227c3040c8b82924992301e958 --ticker AAPL --start 2024-01-01 --end 2025-01-01)",
-      "Bash(curl -s -X POST http://localhost:8000/api/v1/backtest -H 'Content-Type: application/json' -d '{\"ticker\":\"AAPL\",\"start\":\"2023-01-01\",\"end\":\"2023-12-31\"}')"
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/backtest -H 'Content-Type: application/json' -d '{\"ticker\":\"AAPL\",\"start\":\"2023-01-01\",\"end\":\"2023-12-31\"}')",
+      "Bash(python -c \"import ast, sys; ast.parse\\(open\\('ui/app.py'\\).read\\(\\)\\); print\\('Syntax OK'\\)\")",
+      "Bash(git add *)"
     ]
   }
 }

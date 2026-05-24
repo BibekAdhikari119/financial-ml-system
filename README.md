@@ -54,7 +54,7 @@ pip install -r requirements.txt
 
 # 2. Configure environment
 cp .env.example .env
-# Edit .env and add ANTHROPIC_API_KEY (required for agent workspace)
+# Edit .env and add ANTHROPIC_API_KEY (required for orchestrator agent)
 
 # 3. Train the transformer model
 python scripts/train.py \
@@ -100,10 +100,13 @@ Open `http://localhost:8501`. Four tabs:
 
 | Tab | What it does |
 |---|---|
-| **Agent Workspace** | Submit a task to the Planner → Coder → Verifier → Reviewer pipeline |
-| **Market Data** | Fetch and visualise OHLCV data for any ticker |
-| **Technical Indicators** | Compute and plot SMA, RSI, MACD overlays |
-| **Backtest Results** | Run SMA Momentum / RSI Mean-Reversion / MACD Trend vs. Buy & Hold |
+| **AI Signals** | Transformer buy/sell signal, price snapshot, RSI/MACD/BB overlays for any ticker |
+| **Market Data** | Fetch and visualise OHLCV data — close chart, volume, summary metrics |
+| **Technical Indicators** | SMA/EMA overlays, RSI overbought/oversold labels, MACD histogram, ATR volatility |
+| **Backtest Results** | SMA Momentum / RSI Mean-Reversion / MACD Trend vs. Buy & Hold with full metrics |
+
+The sidebar shows model status (loaded / not loaded). Set `MLFLOW_MODEL_PATH` before launching
+to activate live transformer predictions in the AI Signals tab.
 
 ---
 
@@ -217,7 +220,7 @@ financial-ml-system/
 │           ├── backtest.py
 │           └── portfolio.py
 ├── ui/
-│   └── app.py                     # Streamlit dashboard (4 tabs)
+│   └── app.py                     # Streamlit dashboard — AI Signals, Market Data, Indicators, Backtest
 └── tests/
     ├── data/
     ├── features/
@@ -246,7 +249,7 @@ financial-ml-system/
 
 | Variable | Required | Description |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Yes (agent workspace) | Anthropic API key |
+| `ANTHROPIC_API_KEY` | Yes (orchestrator agent) | Anthropic API key — needed to run `agents/orchestrator.py` |
 | `MLFLOW_TRACKING_URI` | No | MLflow tracking URI (default: `./mlruns`) |
 | `MLFLOW_MODEL_PATH` | No | MLflow model URI for live inference, e.g. `runs:/<id>/model` |
 | `MLFLOW_WINDOW_SIZE` | No | Feature window size (default: `60`, must match training) |
